@@ -14,14 +14,6 @@ import json
 def log(string):
   sys.stderr.write("\t\t\t\t\t"+datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
-
-def perform_exit():
-  for key in buffer:
-    sys.stdout.write(buffer[key]['data'])
-  log("[completed]")
-  sys.exit(0)
-
-
 MSG_SIZE = 1500
 TIMEOUT = 30
 
@@ -31,6 +23,9 @@ UDP_IP = "127.0.0.1"
 #UDP_PORT = 0
 UDP_PORT = int(sys.argv[1])
 
+# initialize as False, set to True when weve received all the data
+EOF = False
+
 # Set up the socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((UDP_IP, UDP_PORT))
@@ -39,6 +34,14 @@ sock.settimeout(TIMEOUT)
 # Get port we bound to
 UDP_PORT = sock.getsockname()[1]
 log("[bound] " + str(UDP_PORT))
+
+def perform_exit():
+  for key in buffer:
+    sys.stdout.write(buffer[key]['data'])
+  log("[completed]")
+  sys.exit(0)
+
+
 
 
 #Set a buffer to hold our packets
@@ -69,6 +72,7 @@ while True:
       #and check that the packet has data
       if not buffer.has_key(decoded['sequence']) and decoded['data']:
         buffer[decoded['sequence']] = decoded
+
 
       if decoded['sequence'] == expectedSequence:
         expectedSequence += len(decoded['data'])
