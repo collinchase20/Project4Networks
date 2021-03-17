@@ -11,6 +11,8 @@ from datetime import datetime
 import select
 import json
 
+# we should probably use time instead of datetime - just need seconds anyways
+
 MSG_SIZE = 1500
 #DATA_SIZE = 1000
 DATA_SIZE = 250
@@ -44,10 +46,16 @@ def send_next_packet():
 
   data = sys.stdin.read(DATA_SIZE)
   if (len(data) > 0):
-    msg = json.dumps({"sequence": SEQUENCE, "data": data, "ack": False, "eof": False})
+    msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False}
+    print("msg : ", msg, type(msg))
+    msg['timestamp'] = str(time.time())
+    # print("msg : ", msg, type(msg))
+    msg_dumped = json.dumps(msg)
+    print("msg_dumped : ", msg_dumped, "type :   ", type(msg_dumped))
     SEQUENCE += len(data)
 
     # can just add a timestamp key to the msg, or do below, where we grab the packet from the buffer first
+    print("fr : ", msg['timestamp'])
     msg['timestamp'] = datetime.now()
 
     '''
