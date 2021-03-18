@@ -15,7 +15,7 @@ import json
 
 MSG_SIZE = 1500
 # DATA_SIZE = 1000
-DATA_SIZE = 250
+DATA_SIZE = 500
 TIMEOUT = 60
 SEQUENCE = 0
 RTT = 0  # maybe None???
@@ -35,30 +35,6 @@ sock.settimeout(TIMEOUT)
 
 buffered_packets = {}
 sent_packets = {}
-
-#debugging purposes
-allPackets = []
-#Get all packets for the current test for debugging purposes
-def get_all_packets():
-    global SEQUENCE
-    while True:
-        data = sys.stdin.read(DATA_SIZE)
-        if len(data) > 0:
-            msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False}
-            SEQUENCE += len(data)
-            allPackets.append(msg)
-        else:
-            msg = {"sequence": SEQUENCE, "data": '', "ack": False, "eof": True}
-            allPackets.append(msg)
-            break
-#print all packets for debugging purposes
-def print_all_packets():
-    accum = 0
-    for p in allPackets:
-        print(str(accum) + ":   " + str(p['sequence']) + "  " + str(p['eof']) + "\n")
-        accum += 1
-#get_all_packets()
-#print_all_packets()
 
 def log(string):
     sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")

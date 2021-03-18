@@ -34,7 +34,7 @@ UDP_PORT = sock.getsockname()[1]
 log("[bound] " + str(UDP_PORT))
 
 def perform_exit():
-  for key in buffer:
+  for key in sorted(buffer.keys()):
     sys.stdout.write(buffer[key]['data'])
   log("[completed]")
   sys.exit(0)
