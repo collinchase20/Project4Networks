@@ -62,7 +62,7 @@ while True:
     try:
 
       decoded = json.loads(data)
-      log("THIS IS DECODED DATA RECV: " + str(decoded))
+      # log("THIS IS DECODED DATA RECV: " + str(decoded))
 
       # If the EOF flag is set and we are at the expected sequence then exit
       if (decoded['eof']) and decoded['sequence'] == expectedSequence:
@@ -87,7 +87,7 @@ while True:
       #  sys.stdout.write(decoded['data'])
 
       # Send back an ack to the sender
-      msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data']), 'timeSent': time.time()})
+      msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data']), 'timestamp': time.time()})
       log("ABOUT TO SEND " + msg)
       if sock.sendto(msg, addr) < len(msg):
         log("[error] unable to fully send packet")

@@ -7,123 +7,126 @@
 import sys
 import socket
 import time
-from datetime import datetime
+import datetime
 import select
 import json
 
 # we should probably use time instead of datetime - just need seconds anyways
 
 MSG_SIZE = 1500
-#DATA_SIZE = 1000
+# DATA_SIZE = 1000
 DATA_SIZE = 250
 TIMEOUT = 30
 SEQUENCE = 0
-RTT = 0 # maybe None???
+RTT = 0  # maybe None???
 
 # Bind to localhost and an ephemeral port
 IP_PORT = sys.argv[1]
 UDP_IP = IP_PORT[0:IP_PORT.find(":")]
-UDP_PORT = int(IP_PORT[IP_PORT.find(":")+1:])
+UDP_PORT = int(IP_PORT[IP_PORT.find(":") + 1:])
 dest = (UDP_IP, UDP_PORT)
-
 
 # Set up the socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(TIMEOUT)
 
-buffer = {}
+buffered_packets = {}
 sent_packets = {}
 
-start_time = datetime.now()
+start_time = time.time()
+
 
 def log(string):
-  sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
-
+    sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
 
 def send_next_packet():
-  global SEQUENCE
+    global SEQUENCE
 
-  data = sys.stdin.read(DATA_SIZE)
-  if (len(data) > 0):
-    msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False}
-    print("msg : ", msg, type(msg))
-    msg['timestamp'] = str(time.time())
-    # print("msg : ", msg, type(msg))
-    msg_dumped = json.dumps(msg)
-    print("msg_dumped : ", msg_dumped, "type :   ", type(msg_dumped))
-    SEQUENCE += len(data)
+    data = sys.stdin.read(DATA_SIZE)
+    if len(data) > 0:
+        msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False, "timestamp": time.time()}
+        print("msg : ", msg, type(msg))
+        # print("msg : ", msg, type(msg))
+        msg_dumped = json.dumps(msg)
+        print("msg_dumped : ", msg_dumped, "type :   ", type(msg_dumped))
+        SEQUENCE += len(data)
 
-    # can just add a timestamp key to the msg, or do below, where we grab the packet from the buffer first
-    print("fr : ", msg['timestamp'])
-    msg['timestamp'] = datetime.now()
+        # can just add a timestamp key to the msg, or do below, where we grab the packet from the buffer first
+        print("fr : ", msg['timestamp'])
+        # msg['timestamp'] = datetime.now()
 
-    '''
-    packet_from_buffer = buffer.pop(SEQUENCE)
-    packet_from_buffer['timestamp'] = datetime.now()
-    sent_packets[SEQUENCE] = packet_from_buffer
-    '''
 
-    if sock.sendto(msg, dest) < len(msg):
-      log("[error] unable to fully send packet")
+        if sock.sendto(msg_dumped, dest) < len(msg_dumped):
+            log("[error] unable to fully send packet")
+        else:
+            log("[send data] " + str(SEQUENCE) + " (" + str(len(data)) + ")")
+
+            #map sequence number to the packet in buffered
+            buffered_packets[msg['sequence']] = msg
+        return True
     else:
-      log("[send data] " + str(SEQUENCE) + " (" + str(len(data)) + ")")
-    return True
-  else:
-    return False
+        return False
 
-def get_rtt(timestamp):
-  global RTT
-  rtt_taken = datetime.now() - RTT
-  # is it this easy - we might need a moving average before we update ?
-  RTT = rtt_taken
-  return rtt_taken
+
+def update_RTT(packet):
+    global RTT
+    print("UPDATE_RTT  ! ! !  !! @! @ !! #$!@ #!@ #1")
+    # rtt_taken = time.time() - RTT
+    # is it this easy - we might need a moving average before we update ?
+    time_sent = buffered_packets[packet['sequence']]['timestamp']
+    time_ack_received = sent_packets[packet['sequence']]['timestamp']
+
+    RTT = time_ack_received - time_sent
+    print("RTT of packet : ", packet, "  ", RTT)
 
 
 # Send first packet - added timestamp to every packet sent in this method
 send_next_packet()
 
-
 # Now read in data, send packets
 while True:
-  log("ABOUT TO SLEEP")
-  result = sock.recvfrom(MSG_SIZE)
+    log("ABOUT TO SLEEP")
+    ready = select.select([sock], [], [], 50)
+    print("ready ", ready)
+    if ready[0]:
+        result = sock.recvfrom(MSG_SIZE)
+        print("result : ", result)
 
-  if result:
-    (data, addr) = result
-    log("THIS IS THE DATA RECV: " + data)
-    log("THIS IS THE ADDR RECV" + str(addr))
+        if result:
+            (data, addr) = result
+            log("THIS IS THE DATA RECV: " + data)
+            log("THIS IS THE ADDR RECV" + str(addr))
 
-    try:
-      decoded = json.loads(data)
-      log("THIS IS DECODED DATA SEND: " + str(decoded))
+            try:
+                decoded = json.loads(data)
+                print("decoded : ", decoded, print("type: ", type(decoded)))
+                # log("THIS IS DECODED DATA SEND: " + str(decoded))
 
-      #Add the received acknowledgement to our buffer
-      if not buffer.has_key(decoded['ack']):
-        buffer[decoded['ack']] = decoded
-        # add to the buffer the sequence number of the newly read packet, map to the data of the packet
-        buffer[decoded['sequence']] = decoded['data']
-
-        # get timestamp difference between when initial packet was sent and when the ack was received : RTT
-
-
-      # If there is an ack, send next packet
-      if decoded['ack'] == SEQUENCE:
-        log("[recv ack] " + str(SEQUENCE))
-
+                # Add the received acknowledgement to our buffer
+                # decoded['ack] is the sequence number of the packet its acking
+                if not (decoded['ack']) in sent_packets:
+                    print("were in")
+                    sent_packets[decoded['ack']] = buffered_packets.pop(decoded['ack'])
+                    update_RTT(decoded)
 
 
-        # Try to send next packet; break if no more data
-        if (not send_next_packet()):
-          break
-    except (ValueError, KeyError, TypeError):
-      log("[recv corrupt packet] SEND SIDE")
-  else:
-    log("[error] timeout SEND SIDE")
-    sys.exit(-1)
+                    # get timestamp difference between when initial packet was sent and when the ack was received : RTT
+
+                # If there is an ack, send next packet
+                if decoded['ack'] == SEQUENCE:
+                    log("[recv ack] " + str(SEQUENCE))
+
+                    # Try to send next packet; break if no more data
+                    if (not send_next_packet()):
+                        break
+            except (ValueError, KeyError, TypeError):
+                log("[recv corrupt packet] SEND SIDE")
+        else:
+            log("[error] timeout SEND SIDE")
+            sys.exit(-1)
+    else:
+        continue
 
 sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
 sys.exit(0)
-
-
-
