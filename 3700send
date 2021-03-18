@@ -16,7 +16,7 @@ import json
 MSG_SIZE = 1500
 # DATA_SIZE = 1000
 DATA_SIZE = 250
-TIMEOUT = 30
+TIMEOUT = 60
 SEQUENCE = 0
 RTT = 0  # maybe None???
 
@@ -138,16 +138,21 @@ while True:
             sys.exit(-1)
 
     #Socket was not ready, probably dropped packets, or they are delayed
-    # If there is no more data and we also have no buffered packets left break and try and finish
-    if (not send_next_packet()) and len(buffered_packets) == 0:
-        log("No More Data, Breaking and Trying to Finish")
-        break
-    #We did not break and have more buffered packets to try and send over
-    log("Trying to resend packets")
-    try_to_resend_packets()
+    # If there is no more data and we also have no buffered packets left we need to finish the seqeunce
+    buffpacketsLen = len(buffered_packets)
+    if (not send_next_packet()) and buffpacketsLen == 0:
+        log("No More Data or Buffered Packets, Trying to Send TRUE EOF And Exit")
+        for i in range(20):
+            sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
+        sys.exit(0)
+
+    #We either have more buffered packets to try and retransmit or have more data to read
+    if buffpacketsLen is not 0:
+        log("Trying to resend packets")
+        try_to_resend_packets()
 
 
 
-log("Sending EOF True From Sender")
-sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
-sys.exit(0)
+#log("DOES THIS HIT")
+#sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
+#sys.exit(0)
