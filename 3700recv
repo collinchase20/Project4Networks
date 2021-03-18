@@ -19,11 +19,9 @@ TIMEOUT = 30
 
 # Bind to localhost and an ephemeral port
 UDP_IP = "127.0.0.1"
-#Remove as piazza post said
-#UDP_PORT = 0
 UDP_PORT = int(sys.argv[1])
 
-# initialize as False, set to True when weve received all the data
+# initialize as False, set to True when we have received all the data
 EOF = False
 
 # Set up the socket
@@ -43,52 +41,44 @@ def perform_exit():
 
 
 
-
 #Set a buffer to hold our packets
 buffer = {}  # 250: packet, 500: packet
-
+#Set the expected sequence we should be at
 expectedSequence = 0
 
 # Now listen for packets
 while True:
+  log("Starting RECV Loop")
   result = sock.recvfrom(MSG_SIZE)
-
   # If nothing is ready, we hit the timeout
   if result:
     (data, addr) = result
-    log("THIS IS THE DATA RECV: " + data)
-    log("THIS IS THE ADDR RECV" + str(addr))
-
     try:
 
       decoded = json.loads(data)
-      # log("THIS IS DECODED DATA RECV: " + str(decoded))
 
-      # If the EOF flag is set and we are at the expected sequence then exit
+      # If the EOF flag is set and we are at the expected sequence
+      # which in this case should be the last sequence then exit
       if (decoded['eof']) and decoded['sequence'] == expectedSequence:
         perform_exit()
 
-      #If our buffer does not have the current sequence data add it to the buffer
-      #and check that the packet has data
-      if not buffer.has_key(decoded['sequence']) and decoded['data']:
-        buffer[decoded['sequence']] = decoded
-
-
-      if decoded['sequence'] == expectedSequence:
-        expectedSequence += len(decoded['data'])
-
-
-
       # If there is data, we accept it and print it out
-      #if (decoded['data']):net
+      if decoded['data']:
         # If we receive data, we assume it's in-order
         # You will need to do much more here
-      #  log("[recv data] " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") ACCEPTED (in-order)")
-      #  sys.stdout.write(decoded['data'])
+        log("[recv data] " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") ACCEPTED (in-order)")
+        # If our buffer does not have the current sequence data add it to the buffer
+        if not buffer.has_key(decoded['sequence']):
+          buffer[decoded['sequence']] = decoded
+
+
+        if decoded['sequence'] == expectedSequence:
+          expectedSequence += len(decoded['data'])
+          buffer[decoded['sequence']] = decoded
+
 
       # Send back an ack to the sender
       msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data']), 'timestamp': time.time()})
-      log("ABOUT TO SEND " + msg)
       if sock.sendto(msg, addr) < len(msg):
         log("[error] unable to fully send packet")
       else:

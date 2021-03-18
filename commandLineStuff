@@ -3,3 +3,19 @@
 scp 3700send /Users/collinchase/Desktop/transport-environment
 
 scp 3700recv /Users/collinchase/Desktop/transport-environment
+
+
+
+log("Current Sequence: " + str(curSeq))
+log("This is the data ack: " + str(decoded['ack']))
+log("This is the data eof: " + str(decoded['eof']))
+log("This is the data sequence: " + str(decoded['sequence']))
+
+log("NEW CUR SEQEUNCE: " + str(curSeq))
+
+
+
+
+log("EOF IS TRUE")
+
+log("DECODED SEQUENCE == CUR SEQUENCE ENDING")
