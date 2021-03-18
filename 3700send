@@ -20,6 +20,8 @@ TIMEOUT = 30
 SEQUENCE = 0
 RTT = 0  # maybe None???
 
+WINDOW = 200
+
 # Bind to localhost and an ephemeral port
 IP_PORT = sys.argv[1]
 UDP_IP = IP_PORT[0:IP_PORT.find(":")]
@@ -33,7 +35,30 @@ sock.settimeout(TIMEOUT)
 
 buffered_packets = {}
 sent_packets = {}
-start_time = time.time()
+
+#debugging purposes
+allPackets = []
+#Get all packets for the current test for debugging purposes
+def get_all_packets():
+    global SEQUENCE
+    while True:
+        data = sys.stdin.read(DATA_SIZE)
+        if len(data) > 0:
+            msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False}
+            SEQUENCE += len(data)
+            allPackets.append(msg)
+        else:
+            msg = {"sequence": SEQUENCE, "data": '', "ack": False, "eof": True}
+            allPackets.append(msg)
+            break
+#print all packets for debugging purposes
+def print_all_packets():
+    accum = 0
+    for p in allPackets:
+        print(str(accum) + ":   " + str(p['sequence']) + "  " + str(p['eof']) + "\n")
+        accum += 1
+#get_all_packets()
+#print_all_packets()
 
 def log(string):
     sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
@@ -60,15 +85,24 @@ def send_next_packet():
 
 
 def update_RTT(packet):
-    log("Buffered Packets: " + str(buffered_packets))
     global RTT
-    log("Updating RTT of: " + str(packet))
     time_sent = buffered_packets[packet['ack']]['timestamp']
-    log("HOW BOUT HERE")
     time_ack_received = packet['timestamp']
-    log("MAKE IT HERE?")
     RTT = time_ack_received - time_sent
     log("RTT of packet : " + str(packet) + "  " + str(RTT))
+
+
+def try_to_resend_packets():
+    for key in buffered_packets:
+        msg = buffered_packets[key]
+        msg_dumped = json.dumps(msg)
+        if sock.sendto(msg_dumped, dest) < len(msg_dumped):
+            log("[error] unable to fully send packet")
+        else:
+            log("[retransmit packet] " + str(key))
+            buffered_packets[key] = msg
+        #timeSent = msg['timestamp']
+        #timeElapsed = time.time() - timeSent
 
 
 # Send first packet - added timestamp to every packet sent in this method
@@ -77,33 +111,43 @@ send_next_packet()
 # Now read in data, send packets
 while True:
     log("ABOUT TO SLEEP")
-    result = sock.recvfrom(MSG_SIZE)
-    if result:
+    ready = select.select([sock], [], [], 5)
+    log("READY: " + str(ready))
+    if ready[0]:
+        result = sock.recvfrom(MSG_SIZE)
+        if result:
 
-        (data, addr) = result
+            (data, addr) = result
 
-        try:
-            decoded = json.loads(data)
+            try:
+                decoded = json.loads(data)
 
-            # Add the received acknowledgement to our buffer
-            # decoded['ack] is the sequence number of the packet its acking
-            if not decoded['ack'] in sent_packets:
-                update_RTT(decoded)
-                sent_packets[decoded['ack']] = buffered_packets.pop(decoded['ack'])
+                if decoded['ack'] is not None:
+                    log("[recv ack] " + str(decoded['ack']))
 
-            log("GOt to here")
-            # If there is an ack, send next packet
-            if decoded['ack'] == SEQUENCE:
-                log("[recv ack] " + str(SEQUENCE))
+                    # Add the received acknowledgement to confirmed sent packets
+                    # decoded['ack] is the sequence number of the packet its acking
+                    if not decoded['ack'] in sent_packets:
+                        update_RTT(decoded)
+                        sent_packets[decoded['ack']] = buffered_packets.pop(decoded['ack'])
 
-                # Try to send next packet; break if no more data
-                if (not send_next_packet()):
-                    break
-        except (ValueError, KeyError, TypeError):
-            log("[recv corrupt packet] SEND SIDE")
-    else:
-        log("[error] timeout SEND SIDE")
-        sys.exit(-1)
+            except (ValueError, KeyError, TypeError):
+                log("[recv corrupt packet] SEND SIDE")
+        else:
+            log("[error] timeout SEND SIDE")
+            sys.exit(-1)
 
+    #Socket was not ready, probably dropped packets, or they are delayed
+    # If there is no more data and we also have no buffered packets left break and try and finish
+    if (not send_next_packet()) and len(buffered_packets) == 0:
+        log("No More Data, Breaking and Trying to Finish")
+        break
+    #We did not break and have more buffered packets to try and send over
+    log("Trying to resend packets")
+    try_to_resend_packets()
+
+
+
+log("Sending EOF True From Sender")
 sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
 sys.exit(0)

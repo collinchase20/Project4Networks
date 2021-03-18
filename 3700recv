@@ -59,7 +59,8 @@ while True:
 
       # If the EOF flag is set and we are at the expected sequence
       # which in this case should be the last sequence then exit
-      if (decoded['eof']) and decoded['sequence'] == expectedSequence:
+      if (decoded['eof']): #and decoded['sequence'] == expectedSequence:
+        log("Performing Exit: Got a True EOF")
         perform_exit()
 
       # If there is data, we accept it and print it out
