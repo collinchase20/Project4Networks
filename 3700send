@@ -1,9 +1,5 @@
 #!/usr/bin/python -u
 #
-# CS3700, Spring 2015
-# Project 2 Starter Code
-#
-
 import sys
 import socket
 import time
@@ -11,16 +7,16 @@ import datetime
 import select
 import json
 
-# we should probably use time instead of datetime - just need seconds anyways
-
 MSG_SIZE = 1500
-# DATA_SIZE = 1000
 DATA_SIZE = 500
 TIMEOUT = 60
 SEQUENCE = 0
-RTT = 0  # maybe None???
+RTT = 0
 
-WINDOW = 200
+
+#scp 3700send /Users/collinchase/Desktop/transport-environment
+
+#scp 3700recv /Users/collinchase/Desktop/transport-environment
 
 # Bind to localhost and an ephemeral port
 IP_PORT = sys.argv[1]
@@ -32,17 +28,14 @@ dest = (UDP_IP, UDP_PORT)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(TIMEOUT)
 
-
 buffered_packets = {}
 sent_packets = {}
 
 def log(string):
     sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
-
 def send_next_packet():
     global SEQUENCE
-
     data = sys.stdin.read(DATA_SIZE)
     if len(data) > 0:
         msg = {"sequence": SEQUENCE, "data": data, "ack": False, "eof": False, "timestamp": time.time()}
@@ -68,17 +61,19 @@ def update_RTT(packet):
     log("RTT of packet : " + str(packet) + "  " + str(RTT))
 
 
+
+#Our buffered packets have not been received by the receiver so
+# we need totry and keep resending them until they are popped from our buffered packets
+# and put into sent packets
 def try_to_resend_packets():
-    for key in buffered_packets:
-        msg = buffered_packets[key]
+    for packet in buffered_packets:
+        msg = buffered_packets[packet]
         msg_dumped = json.dumps(msg)
         if sock.sendto(msg_dumped, dest) < len(msg_dumped):
-            log("[error] unable to fully send packet")
+            log("[Error] Could Not Send Packet")
         else:
-            log("[retransmit packet] " + str(key))
-            buffered_packets[key] = msg
-        #timeSent = msg['timestamp']
-        #timeElapsed = time.time() - timeSent
+            log("[Resending This Packet] " + str(packet))
+            buffered_packets[packet] = msg
 
 
 # Send first packet - added timestamp to every packet sent in this method
@@ -112,23 +107,17 @@ while True:
         else:
             log("[error] timeout SEND SIDE")
             sys.exit(-1)
-
     #Socket was not ready, probably dropped packets, or they are delayed
     # If there is no more data and we also have no buffered packets left we need to finish the seqeunce
     buffpacketsLen = len(buffered_packets)
     if (not send_next_packet()) and buffpacketsLen == 0:
         log("No More Data or Buffered Packets, Trying to Send TRUE EOF And Exit")
+        #Make sure the receiver gets the final message. Have to send mutiple times
+        #Incase it is dropped the first time or delayed
         for i in range(20):
             sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
         sys.exit(0)
-
     #We either have more buffered packets to try and retransmit or have more data to read
     if buffpacketsLen is not 0:
         log("Trying to resend packets")
         try_to_resend_packets()
-
-
-
-#log("DOES THIS HIT")
-#sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
-#sys.exit(0)

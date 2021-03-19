@@ -1,9 +1,5 @@
 #!/usr/bin/python -u
 #
-# CS3700, Spring 2015
-# Project 2 Starter Code
-#
-
 import sys
 import socket
 import time
@@ -12,7 +8,7 @@ import select
 import json
 
 def log(string):
-  sys.stderr.write("\t\t\t\t\t"+datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
+  sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
 MSG_SIZE = 1500
 TIMEOUT = 60
@@ -20,9 +16,6 @@ TIMEOUT = 60
 # Bind to localhost and an ephemeral port
 UDP_IP = "127.0.0.1"
 UDP_PORT = int(sys.argv[1])
-
-# initialize as False, set to True when we have received all the data
-EOF = False
 
 # Set up the socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -34,24 +27,22 @@ UDP_PORT = sock.getsockname()[1]
 log("[bound] " + str(UDP_PORT))
 
 def perform_exit():
-  for key in sorted(buffer.keys()):
-    sys.stdout.write(buffer[key]['data'])
+  for key in sorted(finalPackets.keys()):
+    sys.stdout.write(finalPackets[key]['data'])
   log("[completed]")
   sys.exit(0)
 
-
-
 #Set a buffer to hold our packets
-buffer = {}  # 250: packet, 500: packet
+finalPackets = {}  # 250: packet, 500: packet
 #Set the expected sequence we should be at
 expectedSequence = 0
 
 # Now listen for packets
 while True:
   log("Starting RECV Loop")
-  ready = select.select([sock], [], [], 5)
-  log("READY: " + str(ready))
-  if ready[0]:
+  canRecv = select.select([sock], [], [], 5)
+  log("READY: " + str(canRecv))
+  if canRecv[0]:
     result = sock.recvfrom(MSG_SIZE)
     # If nothing is ready, we hit the timeout
     if result:
@@ -62,7 +53,7 @@ while True:
 
         # If the EOF flag is set and we are at the expected sequence
         # which in this case should be the last sequence then exit
-        if (decoded['eof']):  # and decoded['sequence'] == expectedSequence:
+        if (decoded['eof']):
           log("Performing Exit: Got a True EOF")
           perform_exit()
 
@@ -72,12 +63,12 @@ while True:
           # You will need to do much more here
           log("[recv data] " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") ACCEPTED (in-order)")
           # If our buffer does not have the current sequence data add it to the buffer
-          if not buffer.has_key(decoded['sequence']):
-            buffer[decoded['sequence']] = decoded
+          if not finalPackets.has_key(decoded['sequence']):
+            finalPackets[decoded['sequence']] = decoded
 
           if decoded['sequence'] == expectedSequence:
             expectedSequence += len(decoded['data'])
-            buffer[decoded['sequence']] = decoded
+            finalPackets[decoded['sequence']] = decoded
 
         # Send back an ack to the sender
         msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data']), 'timestamp': time.time(), 'eof': False})
